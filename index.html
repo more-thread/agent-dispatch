@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Dispatch</title>
+<meta name="description" content="Compose a task, file it as a labeled GitHub issue, and your on-host AI team opens a PR.">
+<link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;text y='.9em' font-size='90'&gt;📮&lt;/text&gt;&lt;/svg&gt;">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #eef0f4; --surface: #ffffff; --surface-2: #f4f6f9;
+    --border: #d6dbe4; --border-strong: #c2c9d6;
+    --text: #191d27; --muted: #5b6475; --faint: #8a93a6;
+    --accent: #4a39e6; --accent-ink: #ffffff; --accent-soft: #ecebfd;
+    --good: #16794a; --good-soft: #e2f3ea;
+    --code-bg: #12151f; --code-text: #dfe4f0; --code-accent: #b9b2ff;
+    --shadow: 0 1px 2px rgba(20,24,34,.06), 0 8px 28px rgba(20,24,34,.07);
+    --radius: 12px;
+    color-scheme: light dark;
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1017; --surface: #141925; --surface-2: #1b2230;
+      --border: #27303f; --border-strong: #333e51;
+      --text: #e7eaf1; --muted: #9aa4b6; --faint: #6b7587;
+      --accent: #8b7dff; --accent-ink: #0d1017; --accent-soft: #211f45;
+      --good: #45c07d; --good-soft: #15301f;
+      --code-bg: #090b11; --code-text: #dfe4f0; --code-accent: #b9b2ff;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); line-height: 1.5;
+         -webkit-font-smoothing: antialiased; }
+  img { max-width: 100%; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 40px 20px 64px; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 12px;
+             letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+             font-weight: 600; }
+  header { margin-bottom: 28px; }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 6px;
+       text-wrap: balance; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 56ch; margin: 0; }
+  .flow { display: flex; flex-wrap: wrap; gap: 6px 4px; margin: 22px 0 0; }
+  .step { display: flex; align-items: center; gap: 9px; background: var(--surface);
+          border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px;
+          flex: 1 1 150px; }
+  .step .n { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+             color: var(--accent-ink); background: var(--accent); width: 19px; height: 19px;
+             border-radius: 5px; display: grid; place-items: center; flex: none; }
+  .step span { font-size: 12.5px; color: var(--muted); line-height: 1.25; }
+  .step b { color: var(--text); font-weight: 600; }
+  .card { background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px;
+          margin-top: 24px; }
+  .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+  label { font-size: 12px; font-weight: 600; letter-spacing: .03em;
+          text-transform: uppercase; color: var(--muted); }
+  label .req { color: var(--accent); }
+  input, textarea {
+    font: inherit; font-size: 14.5px; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border-strong); border-radius: 9px; padding: 10px 12px;
+    width: 100%; transition: border-color .12s, box-shadow .12s; }
+  input.mono { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; }
+  textarea { resize: vertical; min-height: 112px; line-height: 1.55; }
+  input::placeholder, textarea::placeholder { color: var(--faint); }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .row2 { display: grid; grid-template-columns: 1fr 160px; gap: 16px; }
+  @media (max-width: 480px) { .row2 { grid-template-columns: 1fr; } }
+  .hint { font-size: 12.5px; color: var(--faint); }
+  .hint code { font-family: "IBM Plex Mono", monospace; color: var(--muted);
+               background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; align-items: center; }
+  button { font: inherit; font-weight: 600; font-size: 14px; cursor: pointer;
+           border-radius: 9px; padding: 11px 16px; border: 1px solid transparent;
+           transition: transform .08s, background .12s, border-color .12s; }
+  button:active { transform: translateY(1px); }
+  .primary { background: var(--accent); color: var(--accent-ink); }
+  .primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+  .primary:disabled { opacity: .45; cursor: not-allowed; }
+  .ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
+  .ghost:hover { background: var(--surface-2); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toast { font-size: 13px; color: var(--good); font-weight: 600; opacity: 0;
+           transition: opacity .2s; }
+  .toast.show { opacity: 1; }
+  .preview { margin-top: 24px; }
+  .preview h2 { font-size: 12px; font-weight: 600; letter-spacing: .03em;
+                text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; padding: 4px 10px;
+          border-radius: 999px; border: 1px solid var(--border-strong);
+          background: var(--surface); color: var(--muted); display: inline-flex; gap: 6px; }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip.label { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+  .codeblock { background: var(--code-bg); color: var(--code-text);
+               font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 1.6;
+               border-radius: 10px; padding: 14px 16px; overflow-x: auto; white-space: pre-wrap;
+               word-break: break-word; }
+  .codeblock .flag { color: var(--code-accent); }
+  footer { margin-top: 28px; font-size: 12.5px; color: var(--faint); line-height: 1.6; }
+  footer code { font-family: "IBM Plex Mono", monospace; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">On-host AI dev team</div>
+    <h1>Agent Dispatch</h1>
+    <p class="lede">Compose a task here. It becomes a labeled GitHub issue; the
+      watcher on your laptop picks it up, the team builds it, and a pull request
+      comes back for review.</p>
+    <div class="flow" aria-label="How it works">
+      <div class="step"><span class="n">1</span><span><b>Compose</b> the task here</span></div>
+      <div class="step"><span class="n">2</span><span>File as a GitHub <b>issue</b> (label <b>agent</b>)</span></div>
+      <div class="step"><span class="n">3</span><span>Host <b>watcher</b> runs the team</span></div>
+      <div class="step"><span class="n">4</span><span><b>PR</b> opens for your review</span></div>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="field">
+      <label for="repo">Repository</label>
+      <input id="repo" class="mono" list="repos" value="more-thread/chiseld"
+             placeholder="owner/name" autocomplete="off" spellcheck="false">
+      <datalist id="repos">
+        <option value="more-thread/chiseld"></option>
+        <option value="more-thread/encoding-desk"></option>
+        <option value="more-thread/the-academy"></option>
+        <option value="more-thread/ba-dump"></option>
+      </datalist>
+    </div>
+
+    <div class="field">
+      <label for="title">Task title <span class="req">*</span></label>
+      <input id="title" value="Add a --version flag to the CLI"
+             placeholder="Short summary of what you want built" maxlength="256">
+    </div>
+
+    <div class="field">
+      <label for="body">What should the team do?</label>
+      <textarea id="body" placeholder="Describe the change, acceptance criteria, and any constraints. The Analyst reads this first.">Add a `--version` flag that prints the package version and exits 0. Cover it with a test. Keep the existing command behavior unchanged.</textarea>
+    </div>
+
+    <div class="row2">
+      <div class="field" style="margin:0;">
+        <label for="label">Trigger label</label>
+        <input id="label" class="mono" value="agent" spellcheck="false">
+      </div>
+      <div class="field" style="margin:0; justify-content:flex-end;">
+        <p class="hint">Must match the watcher's <code>--label</code>.</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="open">Open issue on GitHub →</button>
+      <button class="ghost" id="copy">Copy <span class="mono">gh</span> command</button>
+      <span class="toast mono" id="toast">Copied</span>
+    </div>
+  </div>
+
+  <section class="preview">
+    <h2>Preview</h2>
+    <div class="chips">
+      <span class="chip">repo <b id="pv-repo">more-thread/chiseld</b></span>
+      <span class="chip">author <b>you</b></span>
+      <span class="chip label" id="pv-label">label · agent</span>
+    </div>
+    <div class="codeblock" id="pv-cmd"></div>
+  </section>
+
+  <footer>
+    Submitting opens GitHub's new-issue form prefilled — you click <b>Submit new
+    issue</b> while signed in, so no token ever touches this page. The
+    <code>agent</code> label must exist on the repo (the watcher creates it on
+    first run). Start the watcher on your host with
+    <code>python3 watch_issues.py --repo &lt;owner/name&gt;</code>.
+  </footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const els = { repo: $("repo"), title: $("title"), body: $("body"), label: $("label") };
+
+  try {
+    const saved = JSON.parse(localStorage.getItem("agent-dispatch") || "{}");
+    if (saved.repo) els.repo.value = saved.repo;
+    if (saved.label) els.label.value = saved.label;
+  } catch (e) {}
+
+  function issueUrl() {
+    const repo = els.repo.value.trim();
+    const p = new URLSearchParams();
+    if (els.title.value.trim()) p.set("title", els.title.value.trim());
+    if (els.body.value.trim()) p.set("body", els.body.value.trim());
+    if (els.label.value.trim()) p.set("labels", els.label.value.trim());
+    return `https://github.com/${repo}/issues/new?${p.toString()}`;
+  }
+
+  function ghCommand() {
+    const q = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+    const repo = els.repo.value.trim() || "owner/name";
+    let cmd = `gh issue create --repo ${q(repo)}`;
+    cmd += ` \\\n  --title ${q(els.title.value.trim() || "…")}`;
+    if (els.body.value.trim()) cmd += ` \\\n  --body ${q(els.body.value.trim())}`;
+    cmd += ` \\\n  --label ${q(els.label.value.trim() || "agent")}`;
+    return cmd;
+  }
+
+  function render() {
+    const hasTitle = els.title.value.trim().length > 0;
+    const hasRepo = /.+\/.+/.test(els.repo.value.trim());
+    $("open").disabled = !(hasTitle && hasRepo);
+    $("pv-repo").textContent = els.repo.value.trim() || "—";
+    $("pv-label").textContent = "label · " + (els.label.value.trim() || "agent");
+    $("pv-cmd").innerHTML = ghCommand()
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/(--[a-z]+)/g, '<span class="flag">$1</span>');
+    try {
+      localStorage.setItem("agent-dispatch",
+        JSON.stringify({ repo: els.repo.value.trim(), label: els.label.value.trim() }));
+    } catch (e) {}
+  }
+
+  Object.values(els).forEach((el) => el.addEventListener("input", render));
+
+  $("open").addEventListener("click", () => {
+    if ($("open").disabled) return;
+    window.open(issueUrl(), "_blank", "noopener");
+  });
+
+  $("copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(ghCommand().replace(/\\\n  /g, " "));
+      const t = $("toast"); t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 1400);
+    } catch (e) {}
+  });
+
+  render();
+</script>
+</body>
+</html>
