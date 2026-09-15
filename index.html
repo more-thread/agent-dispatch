@@ -180,10 +180,11 @@
 
   <footer>
     Submitting opens GitHub's new-issue form prefilled — you click <b>Submit new
-    issue</b> while signed in, so no token ever touches this page. The
-    <code>agent</code> label must exist on the repo (the watcher creates it on
-    first run). Start the watcher on your host with
-    <code>python3 watch_issues.py --repo &lt;owner/name&gt;</code>.
+    issue</b> while signed in, so no token ever touches this page. Each repo needs
+    the <code>agent</code> label once
+    (<code>python3 watch_issues.py --init --repo &lt;owner/name&gt;</code>); then run
+    <code>python3 watch_issues.py</code> on your host and it watches all your repos,
+    building each issue on the repo it was filed on.
   </footer>
 </div>
 
