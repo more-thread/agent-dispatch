@@ -163,16 +163,6 @@
       <textarea id="body" placeholder="Describe the change, acceptance criteria, and any constraints. The Analyst reads this first.">Add a `--version` flag that prints the package version and exits 0. Cover it with a test. Keep the existing command behavior unchanged.</textarea>
     </div>
 
-    <div class="row2">
-      <div class="field" style="margin:0;">
-        <label for="label">Trigger label</label>
-        <input id="label" class="mono" value="agent" spellcheck="false">
-      </div>
-      <div class="field" style="margin:0; justify-content:flex-end;">
-        <p class="hint">Must match the watcher's <code>--label</code>.</p>
-      </div>
-    </div>
-
     <div class="actions">
       <button class="primary" id="open">Open issue on GitHub →</button>
       <button class="ghost" id="copy">Copy <span class="mono">gh</span> command</button>
@@ -185,48 +175,53 @@
     <div class="chips">
       <span class="chip">repo <b id="pv-repo">more-thread/chiseld</b></span>
       <span class="chip">author <b>you</b></span>
-      <span class="chip label" id="pv-label">label · agent</span>
+      <span class="chip label" id="pv-label">mode · build</span>
     </div>
     <div class="codeblock" id="pv-cmd"></div>
   </section>
 
   <footer>
     Submitting opens GitHub's new-issue form prefilled — you click <b>Submit new
-    issue</b> while signed in, so no token ever touches this page. Each repo needs
-    the <code>agent</code> label once
-    (<code>python3 watch_issues.py --init --repo &lt;owner/name&gt;</code>); then run
-    <code>python3 watch_issues.py</code> on your host and it watches all your repos,
-    building each issue on the repo it was filed on.
+    issue</b> while signed in, so no token ever touches this page. No per-repo
+    setup: just run <code>python3 watch_issues.py</code> on your host and it
+    watches all your repos, building (or answering) each issue on the repo it was
+    filed on.
   </footer>
 </div>
 
 <script>
   const $ = (id) => document.getElementById(id);
-  const els = { repo: $("repo"), title: $("title"), body: $("body"), label: $("label") };
+  const els = { repo: $("repo"), title: $("title"), body: $("body") };
+  const MARK = { build: "agentdispatchbuild", support: "agentdispatchsupport" };
+  let mode = "build";
 
   try {
     const saved = JSON.parse(localStorage.getItem("agent-dispatch") || "{}");
     if (saved.repo) els.repo.value = saved.repo;
-    if (saved.label) els.label.value = saved.label;
   } catch (e) {}
+
+  // The marker in the body is how the host listener finds this issue — no repo
+  // setup, no label needed. Keep it.
+  function bodyWithMarker() {
+    const b = els.body.value.trim();
+    const footer = "<sub>via Agent Dispatch · " + MARK[mode] + "</sub>";
+    return b ? b + "\n\n" + footer : footer;
+  }
 
   function issueUrl() {
     const repo = els.repo.value.trim();
     const p = new URLSearchParams();
     if (els.title.value.trim()) p.set("title", els.title.value.trim());
-    if (els.body.value.trim()) p.set("body", els.body.value.trim());
-    if (els.label.value.trim()) p.set("labels", els.label.value.trim());
+    p.set("body", bodyWithMarker());
     return `https://github.com/${repo}/issues/new?${p.toString()}`;
   }
 
   function ghCommand() {
     const q = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
     const repo = els.repo.value.trim() || "owner/name";
-    let cmd = `gh issue create --repo ${q(repo)}`;
-    cmd += ` \\\n  --title ${q(els.title.value.trim() || "…")}`;
-    if (els.body.value.trim()) cmd += ` \\\n  --body ${q(els.body.value.trim())}`;
-    cmd += ` \\\n  --label ${q(els.label.value.trim() || "agent")}`;
-    return cmd;
+    return `gh issue create --repo ${q(repo)}`
+      + ` \\\n  --title ${q(els.title.value.trim() || "…")}`
+      + ` \\\n  --body ${q(bodyWithMarker())}`;
   }
 
   function render() {
@@ -234,13 +229,12 @@
     const hasRepo = /.+\/.+/.test(els.repo.value.trim());
     $("open").disabled = !(hasTitle && hasRepo);
     $("pv-repo").textContent = els.repo.value.trim() || "—";
-    $("pv-label").textContent = "label · " + (els.label.value.trim() || "agent");
+    $("pv-label").textContent = "mode · " + mode;
     $("pv-cmd").innerHTML = ghCommand()
       .replace(/&/g, "&amp;").replace(/</g, "&lt;")
       .replace(/(--[a-z]+)/g, '<span class="flag">$1</span>');
     try {
-      localStorage.setItem("agent-dispatch",
-        JSON.stringify({ repo: els.repo.value.trim(), label: els.label.value.trim() }));
+      localStorage.setItem("agent-dispatch", JSON.stringify({ repo: els.repo.value.trim() }));
     } catch (e) {}
   }
 
@@ -260,17 +254,16 @@
   });
 
   const MODES = {
-    build: { label: "agent", titleLabel: "Task title", titlePh: "Short summary of what you want built",
+    build: { titleLabel: "Task title", titlePh: "Short summary of what you want built",
              bodyLabel: "What should the team do?", btn: "Open issue on GitHub →",
              hint: "The team builds it and opens a pull request for review." },
-    support: { label: "support", titleLabel: "Your question",
-               titlePh: "e.g. When does the schedule become OPEN?",
+    support: { titleLabel: "Your question", titlePh: "e.g. When does the schedule become OPEN?",
                bodyLabel: "More detail (optional)", btn: "Ask support on GitHub →",
                hint: "The support agent answers from the project's docs & code, as an issue comment." },
   };
-  function setMode(mode) {
+  function setMode(next) {
+    mode = next;
     const m = MODES[mode];
-    els.label.value = m.label;
     document.querySelector('label[for="title"]').firstChild.textContent = m.titleLabel + " ";
     els.title.placeholder = m.titlePh;
     document.querySelector('label[for="body"]').textContent = m.bodyLabel;
